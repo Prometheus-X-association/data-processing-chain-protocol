@@ -125,13 +125,14 @@ class SupervisorContainer {
 
     await Ext.Resolver.setResolverCallbacks({
       paths: {
+        pre: '/node/pre',
         setup: '/node/communicate/setup',
         run: '/node/communicate/run',
       },
       hostResolver: (targetId: string, meta?: PipelineMeta) => {
-        Logger.info({
-          message: `Resolving host for ${targetId}, meta: ${JSON.stringify(meta, null, 2)}`,
-        });
+        // Logger.info({
+        //   message: `Resolving host for ${targetId}, meta: ${JSON.stringify(meta, null, 2)}`,
+        // });
         if (meta?.resolver !== undefined) {
           return meta.resolver;
         }

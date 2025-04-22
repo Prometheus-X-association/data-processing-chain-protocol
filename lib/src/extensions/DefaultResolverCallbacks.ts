@@ -1,9 +1,10 @@
 import { Logger } from '../utils/Logger';
 import {
-  BrodcastSetupMessage,
+  BroadcastSetupMessage,
+  BroadcastPreMessage,
   CallbackPayload,
-  ChainConfig,
-  PipelineMeta,
+  ChainConfig, NodeConfig,
+  PipelineMeta, PipelineData,
 } from '../types/types';
 import { NodeSupervisor } from '../core/NodeSupervisor';
 import { post } from '../utils/http';
@@ -23,7 +24,16 @@ export namespace Ext {
    * Interface for the setup configuration broadcast payload
    */
   export interface BSCPayload {
-    message: BrodcastSetupMessage;
+    message: BroadcastSetupMessage;
+    hostResolver: HostResolverCallback;
+    path: string;
+  }
+
+  /**
+   * Interface for the setup configuration broadcast payload
+   */
+  export interface BDCPayload {
+    message: BroadcastPreMessage;
     hostResolver: HostResolverCallback;
     path: string;
   }
@@ -39,37 +49,79 @@ export namespace Ext {
     Logger.info(`Broadcast message: ${JSON.stringify(message, null, 2)}`);
     const chainConfigs: ChainConfig = message.chain.config;
     const chainId: string = message.chain.id;
-
     for (const config of chainConfigs) {
-      if (config.services.length === 0) {
-        Logger.warn('Empty services array encountered in config');
-        continue;
-      }
-      const service = config.services[0];
-      const targetId: string =
-        typeof service === 'string' ? service : service.targetId;
-      const meta = typeof service === 'string' ? undefined : service.meta;
 
-      const host = hostResolver(targetId, meta);
-      if (!host) {
-        Logger.warn(`No container address found for targetId: ${targetId}`);
-        continue;
-      }
+      const processedConfig = processConfig(config, hostResolver);
+      
       try {
         // Send a POST request to set up the node on a remote container with the specified host address
         const data = JSON.stringify({
           chainId,
           remoteConfigs: config,
         });
-        const url = new URL(path, host);
+        const url = new URL(path, processedConfig?.host);
         void post(url, data);
       } catch (error) {
         Logger.error(
-          `Unexpected error sending setup request to ${host} for targetId ${targetId}: ${(error as Error).message}`,
+          `Unexpected error sending setup request to ${processedConfig?.host} for targetId ${processedConfig?.targetId}: ${(error as Error).message}`,
         );
       }
     }
   };
+
+  /**
+   * Manages broadcasting setup configurations to different remote nodes
+   * @param {BDCPayload} payload - Contains the message to broadcast, host resolution function, and path
+   */
+  export const broadcastPreCallback = async (
+    payload: BDCPayload,
+  ): Promise<Object | undefined> => {
+    const { message, hostResolver, path } = payload;
+    const chainConfigs: ChainConfig = message.chain.config;
+    for (const config of chainConfigs) {
+
+      const processedConfig = processConfig(config, hostResolver);
+
+      try {
+        // Send a POST request to set up the node on a remote container with the specified host address
+        const data = JSON.stringify(config);
+
+        const url = new URL(path, processedConfig?.host);
+        Logger.info(`Broadcast pre message at url: ${JSON.stringify(url, null, 2)}`);
+        return JSON.parse(await post(url, data));
+      } catch (error) {
+        Logger.error(
+          `Unexpected error sending setup request to ${processedConfig?.host} for targetId ${processedConfig?.targetId}: ${(error as Error).message}`,
+        );
+      }
+    }
+  };
+  
+  const processConfig = (config: NodeConfig, hostResolver: HostResolverCallback) =>  {
+
+    // chainId?: string;
+    // nextTargetId?: string;
+    // previousTargetId?: string;
+    // targetId: string;
+    // data: PipelineData;
+    // meta?: PipelineMeta;
+    if (config.services.length === 0) {
+      Logger.warn('Empty services array encountered in config');
+      return;
+    }
+    const service = config.services[0];
+    const targetId: string =
+        typeof service === 'string' ? service : service.targetId;
+    const meta = typeof service === 'string' ? undefined : service.meta;
+
+    const host = hostResolver(targetId, meta);
+    if (!host) {
+      Logger.warn(`No container address found for targetId: ${targetId}`);
+      return;
+    }
+    
+    return { service, targetId, meta, host }
+  }
 
   /**
    * Interface for the payload of remote service calls
@@ -117,7 +169,7 @@ export namespace Ext {
    * Interface for configuring default callbacks
    */
   export interface DefaultCallbackPayload {
-    paths: { setup: string; run: string };
+    paths: { setup: string; run: string; pre: string; };
     hostResolver: HostResolverCallback;
   }
 
@@ -134,13 +186,24 @@ export namespace Ext {
     const supervisor = NodeSupervisor.retrieveService();
 
     supervisor.setBroadcastSetupCallback(
-      async (message: BrodcastSetupMessage): Promise<void> => {
+      async (message: BroadcastSetupMessage): Promise<void> => {
         const payload: BSCPayload = {
           message,
           hostResolver,
           path: paths.setup,
         };
         await broadcastSetupCallback(payload);
+      },
+    );
+
+    supervisor.setBroadcastPreCallback(
+      async (message: BroadcastPreMessage): Promise<any> => {
+        const payload: BDCPayload = {
+          message,
+          hostResolver,
+          path: paths.pre,
+        };
+        return await broadcastPreCallback(payload);
       },
     );
 

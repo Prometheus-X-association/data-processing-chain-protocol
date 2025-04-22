@@ -1,32 +1,36 @@
 import { Node } from './Node';
 import {
-  ServiceCallback,
-  NodeSignal,
-  ChainStatus,
-  PipelineData,
-  SupervisorPayload,
+  BroadcastPreMessage,
+  BroadcastReportingCallback,
+  BroadcastSetupMessage,
   CallbackPayload,
-  BrodcastSetupMessage,
   ChainConfig,
   ChainRelation,
-  NodeConfig,
-  NodeType,
-  SetupCallback,
-  ServiceConfig,
-  DefaultCallback,
-  ReportingCallback,
-  BroadcastReportingCallback,
-  ReportingSignalType,
-  Notification,
+  ChainStatus,
   ChildMode,
+  DefaultCallback,
+  NodeConfig,
+  NodeSignal,
   NodeStatusCallback,
   NodeStatusMessage,
+  NodeType,
+  Notification,
+  PipelineData,
+  PreCallback,
+  ReportingCallback,
+  ReportingSignalType,
+  ResumePayload,
+  ServiceCallback,
+  ServiceConfig,
+  SetupCallback,
+  SupervisorPayload,
 } from '../types/types';
 import { Logger } from '../utils/Logger';
 import { PipelineProcessor } from './PipelineProcessor';
 import { randomUUID } from 'node:crypto';
 import { MonitoringAgent } from '../agents/MonitoringAgent';
-import { NodeSupervisorLogger } from './NodeSupervisorLogger';
+
+// import { NodeSupervisorLogger } from './NodeSupervisorLogger';
 
 /**
  * Manages the lifecycle and distribution of nodes within a processing chain
@@ -35,11 +39,12 @@ export class NodeSupervisor {
   private uid: string;
   private ctn: string;
   private static instance: NodeSupervisor;
-  private nsLogger: NodeSupervisorLogger;
+  // private nsLogger: NodeSupervisorLogger;
   private nodes: Map<string, Node>; // local nodes
   private chains: Map<string, ChainRelation>; // local chains
   private childChains: Map<string, string[]>; // map children to parents
   private broadcastSetupCallback: SetupCallback;
+  private broadcastPreCallback: PreCallback;
   nodeStatusCallback: NodeStatusCallback;
   remoteServiceCallback: ServiceCallback;
 
@@ -50,12 +55,13 @@ export class NodeSupervisor {
   private constructor() {
     this.uid = '@supervisor:default';
     this.ctn = '@container:default';
-    this.nsLogger = new NodeSupervisorLogger();
+    // this.nsLogger = new NodeSupervisorLogger();
     this.nodes = new Map();
     this.chains = new Map();
     this.childChains = new Map();
     this.remoteServiceCallback = DefaultCallback.SERVICE_CALLBACK;
     this.broadcastSetupCallback = DefaultCallback.SETUP_CALLBACK;
+    this.broadcastPreCallback = DefaultCallback.PRE_CALLBACK;
     this.nodeStatusCallback = DefaultCallback.NODE_STATUS_CALLBACK;
   }
 
@@ -74,17 +80,17 @@ export class NodeSupervisor {
 
   /**
    * Logs information based on the specified type.
-   * @param {string} type - The type of log to generate ('chains' or 'monitoring-workflow').
+   * @param {string} type - The type of log to generate ('chains' or 'monitoring-workflow`).
    */
   log(type: string) {
     switch (type) {
       case 'chains':
-        this.nsLogger.logChains(this.chains);
+        // this.nsLogger.logChains(this.chains);
         break;
       case 'monitoring-workflow': {
         const monitoring = MonitoringAgent.retrieveService();
         const workflow = monitoring.getWorkflow();
-        this.nsLogger.logWorkflow(workflow);
+        // this.nsLogger.logWorkflow(workflow);
         break;
       }
       default: {
@@ -127,6 +133,15 @@ export class NodeSupervisor {
   }
 
   /**
+   * Sets the broadcast setup callback function
+   * @param broadcastDeployCallback
+   */
+  setBroadcastPreCallback(broadcastDeployCallback: PreCallback): PreCallback {
+    this.broadcastPreCallback = broadcastDeployCallback;
+    return this.broadcastPreCallback;
+  }
+
+  /**
    * Sets the broadcast reporting callback function
    * @param {BroadcastReportingCallback} broadcastReportingCallback - The callback to handle broadcast reporting signals
    */
@@ -159,13 +174,15 @@ export class NodeSupervisor {
    * Enqueues signals for a specific node to process.
    * @param {string} nodeId - The identifier of the node.
    * @param {NodeSignal.Type[]} status - The signals to enqueue.
+   * @param resumePayload
    * @returns {Promise<void>} A promise that resolves when the signals are enqueued.
    */
   async enqueueSignals(
     nodeId: string,
     status: NodeSignal.Type[],
+    resumePayload?: ResumePayload,
   ): Promise<void> {
-    return this.nodes.get(nodeId)?.enqueueSignals(status);
+    return this.nodes.get(nodeId)?.enqueueSignals(status, resumePayload);
   }
 
   /**
@@ -386,6 +403,7 @@ export class NodeSupervisor {
    * Notifies a node about a chain status change
    * @param {string} nodeId - The node identifier to notify
    * @param {ChainStatus.Type} status - The new chain status to notify
+   * @param {ReportingSignalType} type - The type of reporting signal
    */
   private notify(
     nodeId: string,
@@ -604,6 +622,11 @@ export class NodeSupervisor {
                     ? nextConfig
                     : nextConfig.targetId
                   : undefined,
+                nextNodeResolver: nextConfig
+                  ? typeof nextConfig === 'string'
+                    ? nextConfig
+                    : nextConfig.meta?.resolver
+                  : undefined,
                 nextMeta:
                   nextConfig && typeof nextConfig !== 'string'
                     ? nextConfig.meta
@@ -636,7 +659,7 @@ export class NodeSupervisor {
     chainId: string,
     remoteConfigs: ChainConfig,
   ): Promise<void> {
-    const message: BrodcastSetupMessage = {
+    const message: BroadcastSetupMessage = {
       signal: NodeSignal.NODE_SETUP,
       chain: {
         id: chainId,
@@ -649,6 +672,36 @@ export class NodeSupervisor {
       Logger.info(
         `${this.ctn}: Node creation signal broadcasted with chainId: ${chainId} for remote configs`,
       );
+    } catch (error) {
+      Logger.error(
+        `${this.ctn}: Failed to broadcast node creation signal: ${error}`,
+      );
+    }
+  }
+
+
+  /**
+   * Broadcasts a deploy signal for sub chain
+   * @param {ChainConfig} remoteConfigs - The remote node configurations
+   * @param data
+   */
+  async broadcastNodePreSignal(
+    remoteConfigs: ChainConfig,
+    data?: PipelineData,
+  ): Promise<Object | undefined> {
+    const message: BroadcastPreMessage = {
+      signal: NodeSignal.NODE_PRE,
+      chain: {
+        config: remoteConfigs,
+        data
+      },
+    };
+
+    try {
+      Logger.info(
+        `${this.ctn}: Node creation signal broadcasted with chainId: ${remoteConfigs[0].chainId} for remote configs`,
+      );
+      return await this.broadcastPreCallback(message);
     } catch (error) {
       Logger.error(
         `${this.ctn}: Failed to broadcast node creation signal: ${error}`,
@@ -669,9 +722,9 @@ export class NodeSupervisor {
       if (rootConfig) {
         const rootNodeId = chain?.rootNodeId;
         if (!rootNodeId) {
-          Logger.error(
-            `${this.ctn}: Root node ID for chain ${chainId} not found.`,
-          );
+          // Logger.error(
+          //   `${this.ctn}: Root node ID for chain ${chainId} not found.`,
+          // );
           throw new Error('Root node ID not found');
         }
         const chainMode =
@@ -680,7 +733,7 @@ export class NodeSupervisor {
             : 'serial';
 
         if (chainMode === ChildMode.PARALLEL) {
-          Logger.warn(`// Starting parallel child chain: ${chainId}`);
+          // Logger.warn(`// Starting parallel child chain: ${chainId}`);
           this.notify(
             rootNodeId,
             ChainStatus.CHILD_CHAIN_STARTED,
@@ -696,11 +749,11 @@ export class NodeSupervisor {
               ),
             )
             .catch((error) => {
-              Logger.error(`Failed to start parallel child chain: ${error}`);
+              // Logger.error(`Failed to start parallel child chain: ${error}`);
             });
         } else {
-          Logger.warn(`__ Starting serial child chain: ${chainId}`);
-          await this.startChain(chainId, data);
+          // Logger.warn(`__ Starting serial child chain: ${chainId}`);
+          await this.startChain(chainId);
           this.notify(
             rootNodeId,
             ChainStatus.CHILD_CHAIN_COMPLETED,
@@ -711,6 +764,7 @@ export class NodeSupervisor {
         await this.startChain(chainId, data);
       }
     } else {
+      await this.startChain(chainId);
       Logger.warn(`${this.ctn}:\n\tNothing to process on chain ${chainId}`);
     }
   }
@@ -720,7 +774,7 @@ export class NodeSupervisor {
    * @param {string} chainId - The chain identifier
    * @param {PipelineData} data - The initial data to process
    */
-  async startChain(chainId: string, data: PipelineData): Promise<void> {
+  async startChain(chainId: string, data?: PipelineData): Promise<void> {
     Logger.header(`<<Start Chain>>: Chain ${chainId} requested...`);
     Logger.info(`Data: ${JSON.stringify(data, null, 2)}`);
     const chain = this.chains.get(chainId);
@@ -799,7 +853,7 @@ export class NodeSupervisor {
         data: data as PipelineData,
       });
     } catch (error) {
-      Logger.error(`Error in runNodeByRelation: ${(error as Error).message}`);
+      // Logger.error(`Error in runNodeByRelation: ${(error as Error).message}`);
     }
   }
 
@@ -814,12 +868,12 @@ export class NodeSupervisor {
         await node.sendData();
       } catch (err) {
         const error = err as Error;
-        Logger.error(
-          `${this.ctn}: Node ${nodeId} send data failed: ${error.message}`,
-        );
+        // Logger.error(
+        //   `${this.ctn}: Node ${nodeId} send data failed: ${error.message}`,
+        // );
       }
     } else {
-      Logger.warn(`${this.ctn}: Node ${nodeId} not found.`);
+      // Logger.warn(`${this.ctn}: Node ${nodeId} not found.`);
     }
   }
 

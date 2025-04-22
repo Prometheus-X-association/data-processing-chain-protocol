@@ -13,13 +13,18 @@ export interface PipelineMeta {
 }
 export interface CallbackPayload {
   chainId?: string;
+  nextTargetId?: string;
+  nextNodeResolver?: string;
+  previousNodeResolver?: string;
+  previousTargetId?: string;
   targetId: string;
-  data: PipelineData;
+  data?: PipelineData;
   meta?: PipelineMeta;
 }
 export type NodeStatusCallback = (payload: any) => void;
 export type ServiceCallback = (payload: CallbackPayload) => void;
-export type SetupCallback = (message: BrodcastSetupMessage) => Promise<void>;
+export type SetupCallback = (message: BroadcastSetupMessage) => Promise<void>;
+export type PreCallback = (message: BroadcastPreMessage) => Promise<any>;
 export type ReportingCallback = (message: ReportingMessage) => Promise<void>;
 export type BroadcastReportingCallback = (
   message: BroadcastReportingMessage,
@@ -34,9 +39,14 @@ export namespace DefaultCallback {
   };
   // todo: should be broadcast_setup_callback
   export const SETUP_CALLBACK: SetupCallback = async (
-    message: BrodcastSetupMessage,
+    message: BroadcastSetupMessage,
   ) => {
     Logger.warn('SETUP_CALLBACK not set');
+  };
+  export const PRE_CALLBACK: PreCallback = async (
+    message: BroadcastPreMessage,
+  ) => {
+    Logger.warn('PRE_CALLBACK not set');
   };
   export const REPORTING_CALLBACK: ReportingCallback = async (
     message: ReportingMessage,
@@ -56,6 +66,10 @@ export namespace DefaultCallback {
 }
 
 export type ProcessorCallback = (
+  payload: CallbackPayload,
+) => Promise<any>;
+
+export type preProcessorCallback = (
   payload: CallbackPayload,
 ) => Promise<PipelineData>;
 
@@ -77,6 +91,11 @@ export interface ChainState {
   completed: string[];
   pending: string[];
   failed: string[];
+}
+
+export interface ResumePayload {
+  data: unknown;
+  params: unknown;
 }
 
 export namespace ChainType {
@@ -135,6 +154,7 @@ export namespace NodeSignal {
     | 'node_error'
     | 'node_resume'
     | 'node_stop'
+    | 'node_pre'
     // chain signals
     | 'chain_prepare'
     | 'chain_start'
@@ -152,6 +172,7 @@ export namespace NodeSignal {
   export const NODE_RESUME: 'node_resume' = 'node_resume';
   export const NODE_STOP: 'node_stop' = 'node_stop';
   export const NODE_SUSPEND: 'node_suspend' = 'node_suspend';
+  export const NODE_PRE: 'node_pre' = 'node_pre';
   // chain signals
   export const CHAIN_PREPARE: 'chain_prepare' = 'chain_prepare';
   export const CHAIN_START: 'chain_start' = 'chain_start';
@@ -208,6 +229,12 @@ export type SupervisorPayloadDeployChain = {
   data: PipelineData;
 };
 
+export type SupervisorPayloadPre = {
+  signal: 'node_pre';
+  config: ChainConfig;
+  data?: PipelineData;
+};
+
 export type SupervisorPayload =
   | SupervisorPayloadSetup
   | SupervisorPayloadCreate
@@ -217,7 +244,8 @@ export type SupervisorPayload =
   | SupervisorPayloadPrepareChain
   | SupervisorPayloadStartChain
   | SupervisorPayloadStartPendingChain
-  | SupervisorPayloadDeployChain;
+  | SupervisorPayloadDeployChain
+  | SupervisorPayloadPre;
 
 export interface ServiceConfig {
   targetId: string;
@@ -227,6 +255,8 @@ export interface ServiceConfig {
 export enum ChildMode {
   NORMAL = 'normal',
   PARALLEL = 'parallel',
+  POST = 'post',
+  PRE = 'pre',
 }
 
 export type NodeConfig = {
@@ -236,21 +266,32 @@ export type NodeConfig = {
   count?: number; // automatically set
   location?: NodeType.Type;
   nextTargetId?: string;
+  nextNodeResolver?: string;
+  previousNodeResolver?: string;
   nextMeta?: PipelineMeta;
   chainType?: ChainType.Type;
   monitoringHost?: string;
   childMode?: ChildMode;
   chainConfig?: ChainConfig;
+  pre?: any[];
+  post?: ChainConfig[];
   rootConfig?: NodeConfig;
   signalQueue?: NodeSignal.Type[];
 };
 
 export type ChainConfig = NodeConfig[];
-export interface BrodcastSetupMessage {
+export interface BroadcastSetupMessage {
   signal: NodeSignal.Type;
   chain: {
     id: string;
     config: ChainConfig;
+  };
+}
+export interface BroadcastPreMessage {
+  signal: NodeSignal.Type;
+  chain: {
+    config: ChainConfig;
+    data?: PipelineData;
   };
 }
 

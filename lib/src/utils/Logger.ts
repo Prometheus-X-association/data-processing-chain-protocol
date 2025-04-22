@@ -13,7 +13,6 @@ type LogLevel =
   | 'error'
   | 'header'
   | 'debug'
-  | 'event'
   | 'special';
 
 /**

@@ -17,7 +17,8 @@ export {
   PipelineMeta,
   SupervisorPayload,
   CallbackPayload,
-  BrodcastSetupMessage,
+  BroadcastSetupMessage,
+  BroadcastPreMessage,
   ReportingMessage,
   ChainConfig,
   ChainRelation,
@@ -46,6 +47,7 @@ export namespace Ext {
   export type BRCPayload = ReportingModule.Ext.BRCPayload;
   export type MCPayload = ReportingModule.Ext.MCPayload;
   export type BSCPayload = ResolverModule.Ext.BSCPayload;
+  export type BDCPayload = ResolverModule.Ext.BDCPayload;
   export type RSCPayload = ResolverModule.Ext.RSCPayload;
   export type NSCPayload = NodeStatusModule.Ext.NSCPayload;
   export const Monitoring: typeof MonitoringModule.Ext = MonitoringModule.Ext;

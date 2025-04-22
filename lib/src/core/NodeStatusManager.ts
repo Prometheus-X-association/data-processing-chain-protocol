@@ -1,4 +1,4 @@
-import { NodeSignal, PipelineData, ChainStatus } from '../types/types';
+import { NodeSignal, PipelineData, ChainStatus, ResumePayload } from '../types/types';
 import { Logger } from '../utils/Logger';
 import { Node } from './Node';
 
@@ -6,6 +6,7 @@ interface SuspendedState {
   generator: Generator<any, void, unknown>;
   currentBatch: any;
   data: PipelineData;
+  previousNodeParams?: PipelineData | undefined;
 }
 
 export class NodeStatusManager {
@@ -23,7 +24,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleStopSignal(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing STOP signal');
+    Logger.info(`~ NodeStatusManager: Processing STOP signal`);
   }
 
   /**
@@ -32,7 +33,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleSuspendSignal(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing Suspend signal');
+    Logger.info(`~ NodeStatusManager: Processing Suspend signal`);
     if (!this.status.includes(ChainStatus.NODE_SUSPENDED)) {
       this.status.push(ChainStatus.NODE_SUSPENDED);
       Logger.info(`Node ${this.node.getId()} suspended.`);
@@ -45,7 +46,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleResumeSignal(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing RESUME signal');
+    Logger.info(`~ NodeStatusManager: Processing RESUME signal`);
     const index = this.status.indexOf(ChainStatus.NODE_SUSPENDED);
     if (index > -1) {
       this.status.splice(index, 1);
@@ -76,6 +77,7 @@ export class NodeStatusManager {
     currentBatch: T,
     data: PipelineData,
   ): void {
+    //TODO MONITORING NOTIFY PAUSE
     this.suspendedState = {
       generator,
       currentBatch,
@@ -112,7 +114,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleErrorSignal(): Promise<void> {
-    Logger.error('~ NodeStatusManager: Processing ERROR signal');
+    Logger.error(`NodeStatusManager: Processing ERROR signal`);
   }
 
   /**
@@ -121,7 +123,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleNodeSetup(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing NODE_SETUP signal');
+    Logger.info(`~ NodeStatusManager: Processing NODE_SETUP signal`);
   }
 
   /**
@@ -130,7 +132,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleNodeCreate(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing NODE_CREATE signal');
+    Logger.info(`~ NodeStatusManager: Processing NODE_CREATE signal`);
   }
 
   /**
@@ -139,7 +141,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleNodeDelete(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing NODE_DELETE signal');
+    Logger.info(`~ NodeStatusManager: Processing NODE_DELETE signal`);
   }
 
   /**
@@ -148,7 +150,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleNodeRun(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing NODE_RUN signal');
+    Logger.info(`~ NodeStatusManager: Processing NODE_RUN signal`);
   }
 
   /**
@@ -157,7 +159,7 @@ export class NodeStatusManager {
    * @returns {Promise<void>}
    */
   private async handleNodeSendData(): Promise<void> {
-    Logger.info('~ NodeStatusManager: Processing NODE_SEND_DATA signal');
+    Logger.info(`~ NodeStatusManager: Processing NODE_SEND_DATA signal`);
   }
 
   /**
@@ -172,10 +174,20 @@ export class NodeStatusManager {
   /**
    * Enqueues new signals and processes immediately if the first signal is resume.
    * @param {NodeSignal.Type[]} signals - The signals to add to the queue.
+   * @param resumePayload
    * @returns {Promise<void>}
    */
-  public async enqueueSignals(signals: NodeSignal.Type[]): Promise<void> {
+  public async enqueueSignals(signals: NodeSignal.Type[], resumePayload?: ResumePayload): Promise<void> {
     this.signalQueue.push(...signals);
+
+    if(resumePayload && this.suspendedState?.data){
+      this.suspendedState.data = resumePayload.data;
+    }
+
+    if(resumePayload?.params && this.suspendedState){
+      this.suspendedState.previousNodeParams = resumePayload.params;
+    }
+
     if (signals.length > 0 && signals[0] === NodeSignal.NODE_RESUME) {
       await this.process();
     }
@@ -237,6 +249,7 @@ export class NodeStatusManager {
    * @returns {Promise<ChainStatus.Type[]>} The array of current statuses after processing.
    */
   async process(): Promise<ChainStatus.Type[]> {
+    //TODO
     for (; this.currentCursor < this.signalQueue.length; this.currentCursor++) {
       await this.processNextSignal();
     }

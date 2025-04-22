@@ -23,16 +23,16 @@ export class NodeSupervisorLogger {
       );
       Logger.debug('Chain Configuration:');
       relation.config.forEach((nodeConfig, index) => {
-        Logger.debug(`  Node ${index + 1}:`);
-        Logger.debug(`    Services: ${JSON.stringify(nodeConfig.services)}`);
-        Logger.debug(`    Chain ID: ${nodeConfig.chainId}`);
-        Logger.debug(`    Index: ${nodeConfig.index}`);
-        Logger.debug(`    Count: ${nodeConfig.count}`);
-        Logger.debug(`    Location: ${nodeConfig.location}`);
-        Logger.debug(`    Next Target ID: ${nodeConfig.nextTargetId}`);
-        Logger.debug(`    Chain Type: ${nodeConfig.chainType}`);
-        Logger.debug(`    Monitoring Host: ${nodeConfig.monitoringHost}`);
-        Logger.debug(`    Child Mode: ${nodeConfig.childMode}`);
+        Logger.debug(`Node ${index + 1}:`);
+        Logger.debug(`Services: ${JSON.stringify(nodeConfig.services)}`);
+        Logger.debug(`Chain ID: ${nodeConfig.chainId}`);
+        Logger.debug(`Index: ${nodeConfig.index}`);
+        Logger.debug(`Count: ${nodeConfig.count}`);
+        Logger.debug(`Location: ${nodeConfig.location}`);
+        Logger.debug(`Next Target ID: ${nodeConfig.nextTargetId}`);
+        Logger.debug(`Chain Type: ${nodeConfig.chainType}`);
+        Logger.debug(`Monitoring Host: ${nodeConfig.monitoringHost}`);
+        Logger.debug(`Child Mode: ${nodeConfig.childMode}`);
       });
     });
   }

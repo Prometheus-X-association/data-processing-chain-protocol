@@ -1,15 +1,17 @@
 import {
-  DataType,
+  ChainConfig,
   ChainStatus,
-  PipelineData,
-  ProcessorPipeline,
-  NodeType,
-  NodeSignal,
-  NodeConfig,
   ChainType,
-  PipelineMeta,
-  ReportingSignalType,
+  DataType,
+  NodeConfig,
+  NodeSignal,
+  NodeType,
   Notification,
+  PipelineData,
+  PipelineMeta,
+  ProcessorPipeline,
+  ReportingSignalType, ResumePayload,
+  ServiceConfig,
 } from '../types/types';
 import { setImmediate } from 'timers';
 import { randomUUID } from 'node:crypto';
@@ -37,6 +39,11 @@ export class Node {
     meta?: PipelineMeta;
   } | null;
   private config: NodeConfig | null;
+  private subConfig: ChainConfig | undefined;
+  private subPreConfig: { chainId?: string | undefined, chainConfig: ChainConfig }[];
+  private subPreConfigId: string[];
+  private subPostConfig: ChainConfig[] | undefined;
+  private subParallelConfig: ChainConfig | undefined;
   private reporting: ReportingAgent | null = null;
   private statusManager: NodeStatusManager;
 
@@ -48,6 +55,8 @@ export class Node {
     this.id = randomUUID();
     this.output = [];
     this.pipelines = [];
+    this.subPreConfigId = [];
+    this.subPreConfig = [];
     this.dependencies = dependencies;
     this.status = ChainStatus.NODE_PENDING;
     this.progress = 0;
@@ -55,6 +64,7 @@ export class Node {
     this.executionQueue = Promise.resolve();
     this.nextNodeInfo = null;
     this.config = null;
+    this.subConfig = undefined;
     this.statusManager = new NodeStatusManager(this);
   }
 
@@ -71,7 +81,7 @@ export class Node {
    * @param {NodeConfig} config - Configuration containing services, chainId, index and other options
    */
   setConfig(config: NodeConfig): void {
-    const { chainId, index, count } = config;
+    const { chainId, index, count } = config || {};
     if (index !== undefined && count !== undefined) {
       const monitoring = MonitoringAgent.retrieveService();
       this.reporting = monitoring.genReportingAgent({
@@ -91,8 +101,8 @@ export class Node {
     }
   }
 
-  async enqueueSignals(statusQueue: NodeSignal.Type[]): Promise<void> {
-    await this.statusManager.enqueueSignals(statusQueue);
+  async enqueueSignals(statusQueue: NodeSignal.Type[], resumePayload?: ResumePayload): Promise<void> {
+    await this.statusManager.enqueueSignals(statusQueue, resumePayload);
   }
 
   /**
@@ -140,7 +150,7 @@ export class Node {
   ): Promise<PipelineData> {
     let result = data;
     for (const processor of pipeline) {
-      result = await processor.digest(result);
+      result = await processor.digest(result, this.getConfig());
     }
     return result;
   }
@@ -163,7 +173,8 @@ export class Node {
 
   /**
    * Notifies about node status changes through the reporting agent
-   * @param {ChainStatus.Type} notify - Node status to report
+   * @param notification
+   * @param type
    */
   notify(
     notification: ChainStatus.Type | Notification,
@@ -190,22 +201,83 @@ export class Node {
    * @returns {Promise<void>}
    * @private
    */
-  private async processChildChain(data: PipelineData): Promise<void> {
-    const childConfig = this.config?.chainConfig;
+  private async processChildChain(data?: PipelineData): Promise<void> {
+    this.subConfig = this.config?.chainConfig;
 
-    if (childConfig && Array.isArray(childConfig) && childConfig.length > 0) {
-      childConfig[0].rootConfig = this.config
+    if (this.subConfig && Array.isArray(this.subConfig) && this.subConfig.length > 0) {
+      //Split the config
+      this.subParallelConfig = this.subConfig.filter((elem) => elem.childMode === 'parallel');
+
+      this.subParallelConfig[0].rootConfig = this.config
         ? JSON.parse(JSON.stringify(this.config))
         : undefined;
       const supervisor = NodeSupervisor.retrieveService();
-      const chainId = await supervisor.handleRequest({
-        signal: NodeSignal.CHAIN_DEPLOY,
-        config: childConfig,
-        data,
-      });
 
-      if (!chainId) {
-        throw new Error('Failed to deploy chain: no chainId returned');
+      if(this.subParallelConfig){
+        const parallelChainId = await supervisor.handleRequest({
+          signal: NodeSignal.CHAIN_DEPLOY,
+          config: this.subParallelConfig,
+          data: data,
+        });
+        if (!parallelChainId) {
+          throw new Error('Failed to deploy parallel chain: no chainId returned');
+        }
+      }
+    }
+  }
+
+  /**
+   * Processes pre chains if configured
+   * @param {PipelineData} data - Data to be processed by the child chain
+   * @returns {Promise<void>}
+   * @private
+   */
+  private async processPreChain(data?: PipelineData): Promise<Object | undefined> {
+    if (this.config && this.config.pre && Array.isArray(this.config.pre) && this.config.pre.length > 0) {
+      //Split the config
+      const supervisor = NodeSupervisor.retrieveService();
+
+      if(this.config.pre){
+        for(const preConfig of this.config.pre) {
+          if (preConfig.length > 0) {
+            const updatedRemoteConfigs: NodeConfig[] = preConfig.map(
+              (config: NodeConfig & { targetId: string | undefined; }, index: number) => {
+                let nextConfig: string | ServiceConfig | undefined =
+                      preConfig[index + 1]?.services[0];
+
+                if(!nextConfig){
+                  nextConfig = this.config?.services[0]
+                }
+
+                const nodeConfig: NodeConfig & {targetId: string | undefined} = {
+                  ...config,
+                  chainId: this.config?.chainId ?? '',
+                  nextTargetId: nextConfig
+                    ? typeof nextConfig === 'string'
+                      ? nextConfig
+                      : nextConfig.targetId
+                    : undefined,
+                  nextNodeResolver: nextConfig
+                    ? typeof nextConfig === 'string'
+                      ? nextConfig
+                      : nextConfig.meta?.resolver
+                    : undefined,
+                  nextMeta:
+                        nextConfig && typeof nextConfig !== 'string'
+                          ? nextConfig.meta
+                          : undefined,
+                  targetId: config.services[0]
+                    ? typeof config.services[0] === 'string'
+                      ? config.services[0]
+                      : config.services[0].targetId
+                    : undefined
+                };
+                return nodeConfig;
+              },
+            );
+            return await supervisor.broadcastNodePreSignal(updatedRemoteConfigs, data);
+          }
+        }
       }
     }
   }
@@ -215,7 +287,7 @@ export class Node {
    * @param {PipelineData} data - Data to process
    * @returns {Promise<void>}
    */
-  async execute(data: PipelineData): Promise<void> {
+  async execute(data: any): Promise<void> {
     const childMode =
       this.config?.rootConfig?.childMode === 'parallel'
         ? 'in parallel'
@@ -227,48 +299,66 @@ export class Node {
       `Node ${this.id} execution ${isResuming ? 'resumed' : 'started'} ${childMode}...`,
     );
 
+    //define execution queue logic
     this.executionQueue = this.executionQueue.then(async () => {
       try {
+        //execute pre config
+        // at each node at execution the node will configure the subchain
+        if (this.config && this.config.pre && this.config?.pre?.length > 0) {
+          Logger.info(`child chain found in node: ${this.id}`);
+          const preData: any = await this.processPreChain(data);
+          //TODO use function that generate this information from the chainconfig
+          if(data.additionalData && data.additionalData.length > 0) {
+            data.additionalData.push(preData);
+          } else {
+            const tmpData = data;
+            data = {};
+            data.additionalData = [];
+            data.origin = tmpData;
+            data.additionalData.push(preData?.data ??  preData);
+          }
+        }
+
         this.updateStatus(ChainStatus.NODE_IN_PROGRESS);
         let generator: Generator<ProcessorPipeline[], void, unknown>;
         let processingData = data;
 
-        if (isResuming && suspendedState) {
-          generator = suspendedState.generator as Generator<
-            ProcessorPipeline[],
-            void,
-            unknown
-          >;
-          processingData = suspendedState.data;
-          await this.processBatch(suspendedState.currentBatch, processingData);
-        } else {
+        if(!isResuming){
+          //TODO TEMP
           generator = this.getPipelineGenerator(this.pipelines, 3);
-        }
 
-        let nextResult = isResuming ? generator.next() : generator.next();
+          let nextResult = isResuming ? generator.next() : generator.next();
 
-        while (!nextResult.done) {
-          const status = await this.statusManager.process();
-          if (status.includes(ChainStatus.NODE_SUSPENDED)) {
-            this.statusManager.suspendExecution(
-              generator,
-              nextResult.value,
-              processingData,
-            );
-            return;
+          while (!nextResult.done) {
+
+            await this.processBatch(nextResult.value, processingData);
+            nextResult = generator.next();
+
+            //execute post config
+            if(this.subPostConfig){
+              Logger.warn(`post sub config ${JSON.stringify(this.subPostConfig, null, 2)}`);
+            }
+
+            const status = await this.statusManager.process();
+            if (status.includes(ChainStatus.NODE_SUSPENDED)) {
+              this.statusManager.suspendExecution(
+                generator,
+                nextResult.value,
+                processingData,
+              );
+              return;
+            }
           }
-
-          await this.processBatch(nextResult.value, processingData);
-          nextResult = generator.next();
+        } else {
+          this.output = []
+          this.output.push({ data: suspendedState.data, previousNodeParams: suspendedState.previousNodeParams });
         }
 
         this.statusManager.clearSuspendedState();
         this.updateStatus(ChainStatus.NODE_COMPLETED);
 
-        if (this.config?.chainConfig) {
-          Logger.info(`child chain found in node: ${this.id}`);
-          await this.processChildChain(processingData);
-        }
+        await Node.terminate(this.id, this.output);
+
       } catch (error) {
         if (!this.statusManager.isSuspended()) {
           this.statusManager.clearSuspendedState();
@@ -324,7 +414,7 @@ export class Node {
     // make sure the queue has finished
     await this.executionQueue;
     Logger.info(`Sending data from node ${this.id}.`);
-    await Node.terminate(this.id, this.output);
+    // await Node.terminate(this.id, this.output);
   }
 
   /**

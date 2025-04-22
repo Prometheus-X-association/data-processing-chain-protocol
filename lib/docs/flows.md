@@ -145,7 +145,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A[Start: Chain Deployment] --> B[NodeSupervisor: Create Chain]
-    B --> C[Set up the first node (index = 0)]
+    B --> C[Set up the first node index = 0]
     C --> D{Node Type?}
     D -->|Local| E[Initialize Local Node]
     D -->|Remote| F[Broadcast Setup Signal]

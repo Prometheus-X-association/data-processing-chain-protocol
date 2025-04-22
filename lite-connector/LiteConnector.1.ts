@@ -36,15 +36,15 @@ class SupervisorContainer {
 
   private notify(data: any): void {
     const { chainId, signal: notification } = data;
-    Logger.header({ message: 'Connector - Notification:' });
-    Logger.info({
-      message: `Chain: ${chainId}, Signal: ${JSON.stringify(notification)}\n`,
-    });
+    // Logger.header({ message: 'Connector - Notification:' });
+    // Logger.info({
+    //   message: `Chain: ${chainId}, Signal: ${JSON.stringify(notification)}\n`,
+    // });
     //
-    this.nodeSupervisor.log('chains');
-    Logger.header({ message: '====================================' });
-    this.nodeSupervisor.log('monitoring-workflow');
-    Logger.header({ message: '====================================' });
+    // this.nodeSupervisor.log('chains');
+    // Logger.header({ message: '====================================' });
+    // this.nodeSupervisor.log('monitoring-workflow');
+    // Logger.header({ message: '====================================' });
     //
     this.nodeSupervisor.handleNotification(chainId, notification);
   }
@@ -70,6 +70,21 @@ class SupervisorContainer {
     }
   }
 
+  public async preProcess(req: Request, res: Response): Promise<void> {
+    try {
+      const data = await PipelineProcessor.preProcessorCallback({ targetId: '', data: {
+        test: 'here the pre data'
+      } })
+
+      console.log("DATA pre process", data)
+      res.status(200).json({
+        data,
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
   private async processNodeSignal(
     req: Request,
     res: Response,
@@ -77,7 +92,7 @@ class SupervisorContainer {
     localMessage: string,
     remoteMessage: string,
   ): Promise<void> {
-    const { hostURI, targetId, chainId } = req.body;
+    const { hostURI, targetId, chainId, data, params } = req.body;
 
     if (!hostURI || hostURI === 'local') {
       const nodes = this.nodeSupervisor.getNodesByServiceAndChain(
@@ -85,7 +100,7 @@ class SupervisorContainer {
         chainId,
       );
       const nodeId = nodes[0]?.getId();
-      await this.nodeSupervisor.enqueueSignals(nodeId, [signal]);
+      await this.nodeSupervisor.enqueueSignals(nodeId, [signal], { data, params });
       res.status(200).json({ message: localMessage });
     } else if (hostURI && hostURI !== 'local') {
       this.nodeSupervisor.remoteReport(
@@ -193,13 +208,33 @@ class SupervisorContainer {
 
   public async setup(): Promise<void> {
     PipelineProcessor.setCallbackService(
-      async ({ targetId, data, meta }): Promise<PipelineData> => {
+      async ({ targetId, data, meta, chainId, nextTargetId }): Promise<PipelineData> => {
         Logger.info({
-          message: `PipelineProcessor callback invoked:
+          message: `${process.env.PORT} - PipelineProcessor callback invoked:
+                      - chainId: ${chainId}
+                      - nextTargetId: ${nextTargetId}
                       - Connector: ${this.uid}
                       - Target: ${targetId}
                       - MetaData: ${JSON.stringify(meta?.configuration)}
                       - Data size: ${JSON.stringify(data).length} bytes
+                      - Received DATA: ${JSON.stringify(data)}
+          `,
+        });
+        return data;
+      },
+    );
+
+    PipelineProcessor.setPreCallbackService(
+      async ({ targetId, data, meta, chainId, nextTargetId }): Promise<PipelineData> => {
+        Logger.info({
+          message: `${process.env.PORT} - PipelineProcessor pre callback invoked:
+                      - chainId: ${chainId}
+                      - nextTargetId: ${nextTargetId}
+                      - Connector: ${this.uid}
+                      - Target: ${targetId}
+                      - MetaData: ${JSON.stringify(meta?.configuration)}
+                      - Data size: ${JSON.stringify(data).length} bytes
+                      - Received DATA: ${JSON.stringify(data)}
           `,
         });
         return data;
@@ -209,13 +244,14 @@ class SupervisorContainer {
     await Ext.Resolver.setResolverCallbacks({
       // automatically setup the following rest post methods
       paths: {
+        pre: '/node/pre',
         setup: '/node/communicate/setup',
         run: '/node/communicate/run',
       },
       hostResolver: (targetId: string, meta?: PipelineMeta) => {
-        Logger.info({
-          message: `Resolving host for ${targetId}, meta: ${JSON.stringify(meta, null, 2)}`,
-        });
+        // Logger.info({
+        //   message: `Resolving host for ${targetId}, meta: ${JSON.stringify(meta, null, 2)}`,
+        // });
         if (meta?.resolver !== undefined) {
           return meta.resolver;
         }
@@ -254,6 +290,7 @@ export class LiteConnector {
   private container?: SupervisorContainer;
 
   constructor(port?: number, connectorUid?: string) {
+    process.env.PORT = port?.toString()
     this.app = express();
     this.port = port || parseInt(process.env.PORT || '3000', 10);
     this.connectorUid = connectorUid || process.env.CONNECTOR_UID || 'default';
@@ -270,6 +307,10 @@ export class LiteConnector {
       this.app.post(
         '/chain/create-and-start',
         this.container.createAndStartChain.bind(this.container),
+      );
+      this.app.post(
+        '/node/pre',
+        this.container.preProcess.bind(this.container),
       );
       this.app.post(
         '/node/communicate/:type',

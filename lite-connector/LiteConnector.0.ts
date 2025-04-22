@@ -2,7 +2,8 @@ import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import {
-  BrodcastSetupMessage,
+  BroadcastSetupMessage,
+  BroadcastPreMessage,
   NodeSupervisor,
   PipelineProcessor,
   SupervisorPayloadSetup,
@@ -267,7 +268,7 @@ export class LiteConnector {
 
     // Example of the required broadcast setup callback, using the default broadcastSetupCallback from the dpcp library
     this.nodeSupervisor.setBroadcastSetupCallback(
-      async (message: BrodcastSetupMessage): Promise<void> => {
+      async (message: BroadcastSetupMessage): Promise<void> => {
         const payload: Ext.BSCPayload = {
           message,
           hostResolver: (targetId: string) => {
@@ -276,6 +277,20 @@ export class LiteConnector {
           path: '/node/setup',
         };
         await Ext.Resolver.broadcastSetupCallback(payload);
+      },
+    );
+
+    // Example of the required broadcast setup callback, using the default broadcastSetupCallback from the dpcp library
+    this.nodeSupervisor.setBroadcastPreCallback(
+      async (message: BroadcastPreMessage): Promise<void> => {
+        const payload: Ext.BDCPayload = {
+          message,
+          hostResolver: (targetId: string) => {
+            return this.serviceConnectorMap.get(targetId);
+          },
+          path: '/chain/create-and-start',
+        };
+        await Ext.Resolver.broadcastPreCallback(payload);
       },
     );
 

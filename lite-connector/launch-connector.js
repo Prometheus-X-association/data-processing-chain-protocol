@@ -12,6 +12,7 @@ const connectors = [
   { port: 8888, uid: 'remote-connector1' },
   { port: 8889, uid: 'remote-connector2' },
   { port: 8890, uid: 'remote-connector3' },
+  { port: 8891, uid: 'remote-connector4' },
 ];
 
 console.log('Launching connectors...');
