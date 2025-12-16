@@ -1,0 +1,14 @@
+{
+  "name": "dpcp-library",
+  "version": "1.4.1",
+  "description": "",
+  "main": "./lib/dist/index.js",
+  "module": "./lib/dist/index.mjs",
+  "types": "./lib/dist/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
