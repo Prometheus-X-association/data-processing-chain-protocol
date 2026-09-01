@@ -1,6 +1,6 @@
 {
   "name": "dpcp-library",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "",
   "main": "./lib/dist/index.js",
   "module": "./lib/dist/index.mjs",
