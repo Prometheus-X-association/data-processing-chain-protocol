@@ -311,7 +311,7 @@ export class NodeSupervisor {
     node.setConfig(config);
     this.nodes.set(nodeId, node);
     Logger.info(
-      `${this.ctn}: Node ${nodeId} created with config: ${JSON.stringify(config, null, 2)}`,
+      `${this.ctn}: Node ${nodeId} created`,
     );
     return nodeId;
   }
@@ -776,7 +776,6 @@ export class NodeSupervisor {
    */
   async startChain(chainId: string, data?: PipelineData): Promise<void> {
     Logger.header(`<<Start Chain>>: Chain ${chainId} requested...`);
-    Logger.info(`Data: ${JSON.stringify(data, null, 2)}`);
     const chain = this.chains.get(chainId);
     if (!chain) {
       Logger.warn(`Chain ${chainId} not found.`);

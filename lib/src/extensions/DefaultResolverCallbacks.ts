@@ -46,7 +46,6 @@ export namespace Ext {
     payload: BSCPayload,
   ): Promise<void> => {
     const { message, hostResolver, path } = payload;
-    Logger.info(`Broadcast message: ${JSON.stringify(message, null, 2)}`);
     const chainConfigs: ChainConfig = message.chain.config;
     const chainId: string = message.chain.id;
     for (const config of chainConfigs) {
@@ -138,9 +137,6 @@ export namespace Ext {
    */
   export const remoteServiceCallback = async (payload: RSCPayload) => {
     const { cbPayload, hostResolver, path } = payload;
-    Logger.info(
-      `Service callback payload: ${JSON.stringify(payload, null, 2)}`,
-    );
     try {
       if (!cbPayload.chainId) {
         throw new Error('payload.chainId is undefined');
