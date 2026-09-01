@@ -67,20 +67,21 @@ const dailyTransportOptions = (level: string) => {
   } as DailyRotateFile.DailyRotateFileTransportOptions;
 };
 
-const loggerTransports = [
-  new transports.Console({
-    level: level(),
-    format: format.combine(
-      format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      format.colorize({ all: true }),
-      format.printf((info) => {
-        if (info.level.includes('header')) {
-          return `${info.timestamp} ${info.level}: ${info.message}`;
-        }
-        return `${info.timestamp} ${info.level}: ${info.message}`;
-      }),
-    ),
-  }),
+const loggerTransports: any[] = [
+  ...(process.env.ENABLE_LOGS === 'true'
+    ? [
+        new transports.Console({
+          level: level(),
+          format: format.combine(
+            format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+            format.colorize({ all: true }),
+            format.printf((info) => {
+              return `${info.timestamp} ${info.level}: ${info.message}`;
+            }),
+          ),
+        }),
+      ]
+    : []),
   new DailyRotateFile({
     ...dailyTransportOptions('error'),
   }),
