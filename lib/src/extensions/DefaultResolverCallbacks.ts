@@ -7,7 +7,7 @@ import {
   PipelineMeta, PipelineData,
 } from '../types/types';
 import { NodeSupervisor } from '../core/NodeSupervisor';
-import { post } from '../utils/http';
+import { joinUrl, post } from '../utils/http';
 
 export namespace Ext {
   /**
@@ -52,6 +52,7 @@ export namespace Ext {
     for (const config of chainConfigs) {
 
       const processedConfig = processConfig(config, hostResolver);
+      if (!processedConfig) continue;
       
       try {
         // Send a POST request to set up the node on a remote container with the specified host address
@@ -59,8 +60,10 @@ export namespace Ext {
           chainId,
           remoteConfigs: config,
         });
-        const url = new URL(path, processedConfig?.host);
-        void post(url, data);
+        const url = joinUrl(processedConfig?.host, path);
+        post(url, data).catch((error) =>
+          Logger.error(`Setup request to ${url.href} failed for targetId ${processedConfig.targetId}: ${(error as Error).message}`),
+        );
       } catch (error) {
         Logger.error(
           `Unexpected error sending setup request to ${processedConfig?.host} for targetId ${processedConfig?.targetId}: ${(error as Error).message}`,
@@ -86,7 +89,7 @@ export namespace Ext {
         // Send a POST request to set up the node on a remote container with the specified host address
         const data = JSON.stringify(config);
 
-        const url = new URL(path, processedConfig?.host);
+        const url = joinUrl(processedConfig?.host, path);
         Logger.info(`Broadcast pre message at url: ${JSON.stringify(url, null, 2)}`);
         return JSON.parse(await post(url, data));
       } catch (error) {
@@ -153,7 +156,7 @@ export namespace Ext {
         );
       }
 
-      const url = new URL(path, nextConnectorUrl);
+      const url = joinUrl(nextConnectorUrl, path);
       Logger.info(`Sending data to next connector on: ${url.href}`);
       const data = JSON.stringify(cbPayload);
       await post(url, data);
