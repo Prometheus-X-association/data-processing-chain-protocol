@@ -46,7 +46,10 @@ const Colors = {
  * Logger class for logging messages to the console and optionally to disk.
  */
 export class Logger {
-  private static noPrint: boolean = false; // Flag to disable console output
+  // Console output is enabled only when ENABLE_LOGS=true
+  private static get noPrint(): boolean {
+    return process.env.ENABLE_LOGS !== 'true';
+  }
 
   private static config: LoggerConfig = {
     preserveLogs: false,

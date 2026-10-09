@@ -76,7 +76,7 @@ class SupervisorContainer {
         test: 'here the pre data'
       } })
 
-      console.log("DATA pre process", data)
+      Logger.debug(`DATA pre process ${JSON.stringify(data)}`);
       res.status(200).json({
         data,
       });
@@ -177,9 +177,6 @@ class SupervisorContainer {
         }
 
         case 'enqueue-status': {
-          Logger.info({
-            message: `Enqueue status: ${JSON.stringify(req.body)}`,
-          });
           const { targetId } = req.body.payload;
           const { chainId, signal } = req.body;
           req.body = { targetId, chainId };
@@ -215,9 +212,7 @@ class SupervisorContainer {
                       - nextTargetId: ${nextTargetId}
                       - Connector: ${this.uid}
                       - Target: ${targetId}
-                      - MetaData: ${JSON.stringify(meta?.configuration)}
                       - Data size: ${JSON.stringify(data).length} bytes
-                      - Received DATA: ${JSON.stringify(data)}
           `,
         });
         return data;
@@ -232,9 +227,7 @@ class SupervisorContainer {
                       - nextTargetId: ${nextTargetId}
                       - Connector: ${this.uid}
                       - Target: ${targetId}
-                      - MetaData: ${JSON.stringify(meta?.configuration)}
                       - Data size: ${JSON.stringify(data).length} bytes
-                      - Received DATA: ${JSON.stringify(data)}
           `,
         });
         return data;

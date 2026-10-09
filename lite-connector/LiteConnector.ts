@@ -115,7 +115,6 @@ class SupervisorContainer {
           message: `PipelineProcessor callback invoked:
                       - Connector: ${this.uid}
                       - Target: ${targetId}
-                      - MetaData: ${JSON.stringify(meta?.configuration)}
                       - Data size: ${JSON.stringify(data).length} bytes
           `,
         });
