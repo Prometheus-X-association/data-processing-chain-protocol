@@ -1,4 +1,4 @@
-import { post } from '../utils/http';
+import { joinUrl, post } from '../utils/http';
 import { NodeSupervisor } from '../core/NodeSupervisor';
 import { NodeStatusMessage } from '../types/types';
 import { Logger } from 'utils/Logger';
@@ -50,7 +50,7 @@ export namespace Ext {
     try {
       const { message, path, hostResolver } = payload;
       const host = await hostResolver(message);
-      const url = new URL(path, host);
+      const url = joinUrl(host, path);
       const data = JSON.stringify(message);
       Logger.info(`NodeStatusCallback: Sending message to ${url}`);
       await post(url, data);

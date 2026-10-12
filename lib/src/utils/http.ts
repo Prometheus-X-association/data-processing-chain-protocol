@@ -2,6 +2,13 @@ import { Buffer } from 'buffer';
 import * as http from 'http';
 import * as https from 'https';
 
+
+export const joinUrl = (base: string | undefined, path: string): URL => {
+  const b = base?.endsWith('/') ? base : `${base}/`;
+  const p = path.startsWith('/') ? path.slice(1) : path;
+  return new URL(p, b);
+};
+
 /**
  * Sends a POST request to a specified URL with provided JSON data.
  *
@@ -42,7 +49,7 @@ export const post = async (url: URL, data: string): Promise<string> => {
         } else {
           reject(
             new Error(
-              `HTTP Error: ${res.statusCode} ${res.statusMessage} - URL: ${options.hostname}${options.path}`,
+              `HTTP Error: ${res.statusCode} ${res.statusMessage} - URL: ${url.href}`,
             ),
           );
         }

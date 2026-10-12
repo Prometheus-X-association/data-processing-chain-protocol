@@ -1,7 +1,7 @@
 import { ReportingMessage, BroadcastReportingMessage } from '../types/types';
 import { NodeSupervisor } from '../core/NodeSupervisor';
 import { Logger } from '../utils/Logger';
-import { post } from '../utils/http';
+import {joinUrl, post} from '../utils/http';
 import { MonitoringAgent } from 'agents/MonitoringAgent';
 import { Ext as ExtDMSH } from 'extensions/DefaultMonitoringSignalHandler';
 
@@ -112,7 +112,7 @@ export namespace Ext {
     try {
       const { message, path, monitoringResolver } = payload;
       const monitoringHost = await monitoringResolver(message.chainId);
-      const url = new URL(path, monitoringHost);
+      const url = joinUrl(monitoringHost, path);
       Logger.debug(url.href)
       const data = JSON.stringify(message);
       Logger.info(`BroadcastReportingCallback: Sending message to ${url}`);
