@@ -13,7 +13,7 @@ import {
  */
 export abstract class ReportingAgentBase extends Agent {
   private static authorizedAgent: Agent | null = null;
-  private status: ChainStatus.Type[] = [];
+  private readonly status: ChainStatus.Type[] = [];
 
   /**
    * Creates a new ReportingAgentBase instance

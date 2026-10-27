@@ -6,17 +6,17 @@ interface SuspendedState {
   generator: Generator<any, void, unknown>;
   currentBatch: any;
   data: PipelineData;
-  previousNodeParams?: PipelineData | undefined;
+  previousNodeParams?: PipelineData;
 }
 
 export class NodeStatusManager {
   private signalQueue: NodeSignal.Type[] = [];
   private currentCursor: number = 0;
-  private status: ChainStatus.Type[] = [];
+  private readonly status: ChainStatus.Type[] = [];
   private suspendedState: SuspendedState | null = null;
 
   // eslint-disable-next-line no-unused-vars
-  constructor(private node: Node) {}
+  constructor(private readonly node: Node) {}
 
   /**
    * Handles the stop signal by logging a message.

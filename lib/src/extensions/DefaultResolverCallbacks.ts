@@ -4,7 +4,7 @@ import {
   BroadcastPreMessage,
   CallbackPayload,
   ChainConfig, NodeConfig,
-  PipelineMeta, PipelineData,
+  PipelineMeta,
 } from '../types/types';
 import { NodeSupervisor } from '../core/NodeSupervisor';
 import { joinUrl, post } from '../utils/http';

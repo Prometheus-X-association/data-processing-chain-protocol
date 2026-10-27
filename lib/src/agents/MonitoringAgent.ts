@@ -50,7 +50,7 @@ export class MonitoringAgent extends Agent {
   private static instance: MonitoringAgent;
   private reportingCallback: ReportingCallback;
   private broadcastReportingCallback: ReportingCallback;
-  private remoteMonitoringHost: Map<string, string>;
+  private readonly remoteMonitoringHost: Map<string, string>;
   private workflow: Workflow;
 
   /**

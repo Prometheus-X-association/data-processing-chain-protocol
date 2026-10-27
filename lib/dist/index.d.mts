@@ -1,11 +1,13 @@
 declare class PipelineProcessor {
-    static callbackService: ProcessorCallback;
-    static preProcessorCallback: preProcessorCallback;
-    private meta?;
-    private targetId;
+    private static _callbackService;
+    private static _preProcessorCallback;
+    private readonly meta?;
+    private readonly targetId;
     constructor(config: ServiceConfig);
     static setCallbackService(callbackService: ProcessorCallback): void;
+    static get callbackService(): ProcessorCallback;
     static setPreCallbackService(preCallbackService: ProcessorCallback): void;
+    static get preProcessorCallback(): preProcessorCallback;
     digest(data: PipelineData, config?: NodeConfig | null): Promise<PipelineData>;
 }
 
@@ -214,24 +216,24 @@ interface ChainRelation {
 }
 
 declare class Node {
-    private id;
-    private pipelines;
-    private dependencies;
+    private readonly id;
+    private readonly pipelines;
+    private readonly dependencies;
     private status;
     private error?;
     private progress;
-    private dataType;
+    private readonly dataType;
     private executionQueue;
     private output;
     private nextNodeInfo;
     private config;
     private subConfig;
-    private subPreConfig;
-    private subPreConfigId;
-    private subPostConfig;
+    private readonly subPreConfig;
+    private readonly subPreConfigId;
+    private readonly subPostConfig;
     private subParallelConfig;
     private reporting;
-    private statusManager;
+    private readonly statusManager;
     constructor(dependencies?: string[]);
     private updateProgress;
     setConfig(config: NodeConfig): void;
@@ -245,6 +247,8 @@ declare class Node {
     notify(notification: ChainStatus.Type | Notification, type?: ReportingSignalType): void;
     private processChildChain;
     private processPreChain;
+    private mergePreChainData;
+    private runPipelineBatches;
     execute(data: any): Promise<void>;
     private processBatch;
     sendData(): Promise<void>;
@@ -271,9 +275,9 @@ declare class NodeSupervisor {
     private ctn;
     private static instance;
     private readonly nsLogger;
-    private nodes;
-    private chains;
-    private childChains;
+    private readonly nodes;
+    private readonly chains;
+    private readonly childChains;
     private broadcastSetupCallback;
     private broadcastPreCallback;
     nodeStatusCallback: NodeStatusCallback;
@@ -304,6 +308,8 @@ declare class NodeSupervisor {
     private updateChain;
     private setRemoteMonitoringHost;
     prepareChainDistribution(chainId: string): Promise<void>;
+    private setupLocalNodes;
+    private broadcastRemoteConfigs;
     broadcastNodeSetupSignal(chainId: string, remoteConfigs: ChainConfig): Promise<void>;
     broadcastNodePreSignal(remoteConfigs: ChainConfig, data?: PipelineData): Promise<Object | undefined>;
     startPendingChain(chainId: string): Promise<void>;

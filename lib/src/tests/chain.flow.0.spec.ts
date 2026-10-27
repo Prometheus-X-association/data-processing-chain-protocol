@@ -1,10 +1,9 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Node } from '../core/Node';
-import { ChainType, ChainStatus } from '../types/types';
+import { ChainType, ChainStatus, NodeSignal } from '../types/types';
 import { PipelineProcessor } from '../core/PipelineProcessor';
 import { NodeSupervisor } from '../core/NodeSupervisor';
-import { NodeSignal } from '../types/types';
 
 describe('Node System Tests', function () {
   let nodes: Node[];

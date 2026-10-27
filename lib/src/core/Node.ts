@@ -19,18 +19,19 @@ import { Logger } from '../utils/Logger';
 import { NodeSupervisor } from './NodeSupervisor';
 import { MonitoringAgent, ReportingAgent } from '../agents/MonitoringAgent';
 import { NodeStatusManager } from './NodeStatusManager';
+import { getServiceResolver, getServiceTargetId } from '../utils/service';
 
 /**
  * Represents a single executable node within a chain
  */
 export class Node {
-  private id: string;
-  private pipelines: ProcessorPipeline[];
-  private dependencies: string[];
+  private readonly id: string;
+  private readonly pipelines: ProcessorPipeline[];
+  private readonly dependencies: string[];
   private status: ChainStatus.Type;
   private error?: Error;
   private progress: number;
-  private dataType: DataType.Type;
+  private readonly dataType: DataType.Type;
   private executionQueue: Promise<void>;
   private output: PipelineData[];
   private nextNodeInfo: {
@@ -40,12 +41,12 @@ export class Node {
   } | null;
   private config: NodeConfig | null;
   private subConfig: ChainConfig | undefined;
-  private subPreConfig: { chainId?: string | undefined, chainConfig: ChainConfig }[];
-  private subPreConfigId: string[];
-  private subPostConfig: ChainConfig[] | undefined;
+  private readonly subPreConfig: { chainId?: string, chainConfig: ChainConfig }[];
+  private readonly subPreConfigId: string[];
+  private readonly subPostConfig: ChainConfig[] | undefined;
   private subParallelConfig: ChainConfig | undefined;
   private reporting: ReportingAgent | null = null;
-  private statusManager: NodeStatusManager;
+  private readonly statusManager: NodeStatusManager;
 
   /**
    * Creates a new Node instance
@@ -209,7 +210,7 @@ export class Node {
       this.subParallelConfig = this.subConfig.filter((elem) => elem.childMode === 'parallel');
 
       this.subParallelConfig[0].rootConfig = this.config
-        ? JSON.parse(JSON.stringify(this.config))
+        ? structuredClone(this.config)
         : undefined;
       const supervisor = NodeSupervisor.retrieveService();
 
@@ -252,25 +253,13 @@ export class Node {
                 const nodeConfig: NodeConfig & {targetId: string | undefined} = {
                   ...config,
                   chainId: this.config?.chainId ?? '',
-                  nextTargetId: nextConfig
-                    ? typeof nextConfig === 'string'
-                      ? nextConfig
-                      : nextConfig.targetId
-                    : undefined,
-                  nextNodeResolver: nextConfig
-                    ? typeof nextConfig === 'string'
-                      ? nextConfig
-                      : nextConfig.meta?.resolver
-                    : undefined,
+                  nextTargetId: getServiceTargetId(nextConfig),
+                  nextNodeResolver: getServiceResolver(nextConfig),
                   nextMeta:
                         nextConfig && typeof nextConfig !== 'string'
                           ? nextConfig.meta
                           : undefined,
-                  targetId: config.services[0]
-                    ? typeof config.services[0] === 'string'
-                      ? config.services[0]
-                      : config.services[0].targetId
-                    : undefined
+                  targetId: getServiceTargetId(config.services[0])
                 };
                 return nodeConfig;
               },
@@ -280,6 +269,58 @@ export class Node {
         }
       }
     }
+  }
+
+  /**
+   * Runs the pre chain if configured and merges its result into the input data
+   * @param {any} data - Data to process
+   * @returns {Promise<any>} Data enriched with the pre chain result
+   * @private
+   */
+  private async mergePreChainData(data: any): Promise<any> {
+    if (!this.config?.pre || this.config.pre.length === 0) {
+      return data;
+    }
+    Logger.info(`child chain found in node: ${this.id}`);
+    const preData: any = await this.processPreChain(data);
+    //TODO use function that generate this information from the chainconfig
+    if (data.additionalData && data.additionalData.length > 0) {
+      data.additionalData.push(preData);
+      return data;
+    }
+    return {
+      additionalData: [preData?.data ?? preData],
+      origin: data,
+    };
+  }
+
+  /**
+   * Processes the node pipelines batch by batch, suspending if requested
+   * @param {PipelineData} data - Data to process
+   * @returns {Promise<boolean>} Whether the execution has been suspended
+   * @private
+   */
+  private async runPipelineBatches(data: PipelineData): Promise<boolean> {
+    //TODO TEMP
+    const generator = this.getPipelineGenerator(this.pipelines, 3);
+    let nextResult = generator.next();
+
+    while (!nextResult.done) {
+      await this.processBatch(nextResult.value, data);
+      nextResult = generator.next();
+
+      //execute post config
+      if (this.subPostConfig) {
+        Logger.warn(`post sub config ${JSON.stringify(this.subPostConfig, null, 2)}`);
+      }
+
+      const status = await this.statusManager.process();
+      if (status.includes(ChainStatus.NODE_SUSPENDED)) {
+        this.statusManager.suspendExecution(generator, nextResult.value, data);
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -304,50 +345,14 @@ export class Node {
       try {
         //execute pre config
         // at each node at execution the node will configure the subchain
-        if (this.config && this.config.pre && this.config?.pre?.length > 0) {
-          Logger.info(`child chain found in node: ${this.id}`);
-          const preData: any = await this.processPreChain(data);
-          //TODO use function that generate this information from the chainconfig
-          if(data.additionalData && data.additionalData.length > 0) {
-            data.additionalData.push(preData);
-          } else {
-            const tmpData = data;
-            data = {};
-            data.additionalData = [];
-            data.origin = tmpData;
-            data.additionalData.push(preData?.data ??  preData);
-          }
-        }
+        data = await this.mergePreChainData(data);
 
         this.updateStatus(ChainStatus.NODE_IN_PROGRESS);
-        let generator: Generator<ProcessorPipeline[], void, unknown>;
-        let processingData = data;
 
-        if(!isResuming){
-          //TODO TEMP
-          generator = this.getPipelineGenerator(this.pipelines, 3);
-
-          let nextResult = generator.next();
-
-          while (!nextResult.done) {
-
-            await this.processBatch(nextResult.value, processingData);
-            nextResult = generator.next();
-
-            //execute post config
-            if(this.subPostConfig){
-              Logger.warn(`post sub config ${JSON.stringify(this.subPostConfig, null, 2)}`);
-            }
-
-            const status = await this.statusManager.process();
-            if (status.includes(ChainStatus.NODE_SUSPENDED)) {
-              this.statusManager.suspendExecution(
-                generator,
-                nextResult.value,
-                processingData,
-              );
-              return;
-            }
+        if (!isResuming) {
+          const suspended = await this.runPipelineBatches(data);
+          if (suspended) {
+            return;
           }
         } else {
           this.output = []
@@ -386,24 +391,15 @@ export class Node {
     pipelineBatch: ProcessorPipeline[],
     data: PipelineData,
   ): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      setImmediate(async () => {
-        try {
-          const batchPromises = pipelineBatch.map((pipeline) =>
-            this.processPipeline(pipeline, data).then(
-              (pipelineData: PipelineData) => {
-                this.output.push(pipelineData);
-                this.updateProgress();
-              },
-            ),
-          );
-          await Promise.all(batchPromises);
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
+    // yield to the event loop before processing the batch
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await Promise.all(
+      pipelineBatch.map(async (pipeline) => {
+        const pipelineData = await this.processPipeline(pipeline, data);
+        this.output.push(pipelineData);
+        this.updateProgress();
+      }),
+    );
   }
 
   /**
@@ -414,7 +410,6 @@ export class Node {
     // make sure the queue has finished
     await this.executionQueue;
     Logger.info(`Sending data from node ${this.id}.`);
-    // await Node.terminate(this.id, this.output);
   }
 
   /**

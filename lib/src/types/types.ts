@@ -114,7 +114,6 @@ export namespace ChainStatus {
     | 'node_in_progress' // running
     | 'node_completed'
     | 'node_failed'
-    // | 'node_paused'
     | 'node_resumed'
     | 'node_suspended'
     | 'node_setup_completed'
@@ -122,7 +121,6 @@ export namespace ChainStatus {
     | 'child_chain_completed'
     | 'node_pending_deletion'
     | 'node_end_of_pipeline';
-  // export const NODE_PAUSED: Type = 'node_paused';
   export const CHAIN_NOTIFIED: Type = 'chain_notified';
   export const CHAIN_DEPLOYED: Type = 'chain_deployed';
   export const CHAIN_SETUP_COMPLETED: Type = 'chain_setup_completed';
@@ -146,9 +144,7 @@ export namespace NodeSignal {
     | 'node_setup'
     | 'node_create'
     | 'node_delete'
-    // | 'node_pause'
     | 'node_suspend'
-    // | 'node_delay'
     | 'node_run'
     | 'node_send_data'
     | 'node_error'
@@ -164,8 +160,6 @@ export namespace NodeSignal {
   export const NODE_SETUP: 'node_setup' = 'node_setup';
   export const NODE_CREATE: 'node_create' = 'node_create';
   export const NODE_DELETE: 'node_delete' = 'node_delete';
-  // export const NODE_PAUSE: 'node_pause' = 'node_pause';
-  // export const NODE_DELAY: 'node_delay' = 'node_delay';
   export const NODE_RUN: 'node_run' = 'node_run';
   export const NODE_SEND_DATA: 'node_send_data' = 'node_send_data';
   export const NODE_ERROR: 'node_error' = 'node_error';

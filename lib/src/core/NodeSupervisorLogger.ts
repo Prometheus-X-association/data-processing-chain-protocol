@@ -4,12 +4,6 @@ import { Workflow } from '../agents/MonitoringAgent';
 
 export class NodeSupervisorLogger {
   /**
-   * Creates a new instance of NodeSupervisorLogger.
-   * @private
-   */
-  constructor() {}
-
-  /**
    * Logs the content of the chains map.
    * @param {Map<string, ChainRelation>} chains - The map of chains to log.
    */
