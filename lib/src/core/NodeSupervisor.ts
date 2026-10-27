@@ -30,7 +30,7 @@ import { PipelineProcessor } from './PipelineProcessor';
 import { randomUUID } from 'node:crypto';
 import { MonitoringAgent } from '../agents/MonitoringAgent';
 
-// import { NodeSupervisorLogger } from './NodeSupervisorLogger';
+import { NodeSupervisorLogger } from './NodeSupervisorLogger';
 
 /**
  * Manages the lifecycle and distribution of nodes within a processing chain
@@ -39,7 +39,7 @@ export class NodeSupervisor {
   private uid: string;
   private ctn: string;
   private static instance: NodeSupervisor;
-  // private nsLogger: NodeSupervisorLogger;
+  private readonly nsLogger: NodeSupervisorLogger;
   private nodes: Map<string, Node>; // local nodes
   private chains: Map<string, ChainRelation>; // local chains
   private childChains: Map<string, string[]>; // map children to parents
@@ -55,7 +55,7 @@ export class NodeSupervisor {
   private constructor() {
     this.uid = '@supervisor:default';
     this.ctn = '@container:default';
-    // this.nsLogger = new NodeSupervisorLogger();
+    this.nsLogger = new NodeSupervisorLogger();
     this.nodes = new Map();
     this.chains = new Map();
     this.childChains = new Map();
@@ -85,12 +85,12 @@ export class NodeSupervisor {
   log(type: string) {
     switch (type) {
       case 'chains':
-        // this.nsLogger.logChains(this.chains);
+        this.nsLogger.logChains(this.chains);
         break;
       case 'monitoring-workflow': {
         const monitoring = MonitoringAgent.retrieveService();
         const workflow = monitoring.getWorkflow();
-        // this.nsLogger.logWorkflow(workflow);
+        this.nsLogger.logWorkflow(workflow);
         break;
       }
       default: {
@@ -722,9 +722,9 @@ export class NodeSupervisor {
       if (rootConfig) {
         const rootNodeId = chain?.rootNodeId;
         if (!rootNodeId) {
-          // Logger.error(
-          //   `${this.ctn}: Root node ID for chain ${chainId} not found.`,
-          // );
+          Logger.error(
+            `${this.ctn}: Root node ID for chain ${chainId} not found.`,
+          );
           throw new Error('Root node ID not found');
         }
         const chainMode =
@@ -733,7 +733,7 @@ export class NodeSupervisor {
             : 'serial';
 
         if (chainMode === ChildMode.PARALLEL) {
-          // Logger.warn(`// Starting parallel child chain: ${chainId}`);
+          Logger.info(`${this.ctn}: Starting parallel child chain: ${chainId}`);
           this.notify(
             rootNodeId,
             ChainStatus.CHILD_CHAIN_STARTED,
@@ -749,10 +749,12 @@ export class NodeSupervisor {
               ),
             )
             .catch((error) => {
-              // Logger.error(`Failed to start parallel child chain: ${error}`);
+              Logger.error(
+                `${this.ctn}: Failed to start parallel child chain ${chainId}: ${error}`,
+              );
             });
         } else {
-          // Logger.warn(`__ Starting serial child chain: ${chainId}`);
+          Logger.info(`${this.ctn}: Starting serial child chain: ${chainId}`);
           await this.startChain(chainId);
           this.notify(
             rootNodeId,
@@ -852,7 +854,9 @@ export class NodeSupervisor {
         data: data as PipelineData,
       });
     } catch (error) {
-      // Logger.error(`Error in runNodeByRelation: ${(error as Error).message}`);
+      Logger.error(
+        `${this.ctn}: Error in runNodeByRelation: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -867,12 +871,12 @@ export class NodeSupervisor {
         await node.sendData();
       } catch (err) {
         const error = err as Error;
-        // Logger.error(
-        //   `${this.ctn}: Node ${nodeId} send data failed: ${error.message}`,
-        // );
+        Logger.error(
+          `${this.ctn}: Node ${nodeId} send data failed: ${error.message}`,
+        );
       }
     } else {
-      // Logger.warn(`${this.ctn}: Node ${nodeId} not found.`);
+      Logger.warn(`${this.ctn}: Node ${nodeId} not found.`);
     }
   }
 

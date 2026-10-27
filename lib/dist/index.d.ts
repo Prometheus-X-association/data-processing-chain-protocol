@@ -270,6 +270,7 @@ declare class NodeSupervisor {
     private uid;
     private ctn;
     private static instance;
+    private readonly nsLogger;
     private nodes;
     private chains;
     private childChains;

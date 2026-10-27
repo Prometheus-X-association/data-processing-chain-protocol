@@ -49,7 +49,7 @@ describe('Node Supervisor Chain Flow Test', function () {
       },
     ];
 
-    let callOrder: string[] = [];
+    const callOrder: string[] = [];
     PipelineProcessor.setCallbackService(({ targetId, data }) => {
       callOrder.push(targetId);
       return Promise.resolve({ ...(data as any), [targetId]: 'processed' });
@@ -85,6 +85,12 @@ describe('Node Supervisor Chain Flow Test', function () {
       'service2',
       'processed',
     );
+
+    expect(callOrder, 'expect services called in chain order').to.deep.equal([
+      'service1',
+      'service2',
+      'service3',
+    ]);
 
     expect(terminateSpy.calledThrice, 'expect 7').to.be.true;
     expect(terminateSpy.lastCall.args[1], 'expect 8').to.deep.equal([

@@ -58,7 +58,7 @@ export namespace DefaultCallback {
   ) => {
     Logger.warn('BROADCAST_REPORTING_CALLBACK not set');
   };
-  export const NODE_STATUS_CALLBACK: NodeStatusCallback = async (
+  export const NODE_STATUS_CALLBACK: NodeStatusCallback = (
     message: NodeStatusMessage,
   ) => {
     Logger.warn('NODE_STATUS_CALLBACK not set');

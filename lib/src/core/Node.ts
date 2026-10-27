@@ -327,7 +327,7 @@ export class Node {
           //TODO TEMP
           generator = this.getPipelineGenerator(this.pipelines, 3);
 
-          let nextResult = isResuming ? generator.next() : generator.next();
+          let nextResult = generator.next();
 
           while (!nextResult.done) {
 
